@@ -1,4 +1,5 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using Newtonsoft.Json;
@@ -13,6 +14,8 @@ public class dialogWrap : MonoBehaviour
     //private const string dialogsJson = "{\"dialogs\":[{\"name\": \"initial\", \"dialog\": [{\"text\": [\"Dialogs are in WIP.\"], \"color\": 4, \"rightAlign\": false, \"style\": 0, \"anim\": false}]}]}";
     public bool dialogBusy;
     private bool appendBusy;
+    public KMAudio Audio;
+    public AudioClip leftSpeaker, rightSpeaker;
     
     void Awake()
     {
@@ -30,11 +33,11 @@ public class dialogWrap : MonoBehaviour
         foreach (string[] tuple in tuples)
         {
             if (tuple.Length<2) yield return PlayDialogSequence(tuple[0]);
-            else yield return PlayDialogSequence(tuple[0],tuple.Skip(1).ToArray());
+            else yield return PlayDialogSequence(tuple[0],false,tuple.Skip(1).ToArray());
         }
     }
     
-    public IEnumerator PlayDialogSequence(string sequenceName)
+    public IEnumerator PlayDialogSequence(string sequenceName, bool immediate = false)
     {
         if (!dialogBusy){
             dialogBusy = true;
@@ -47,13 +50,13 @@ public class dialogWrap : MonoBehaviour
                         part.rightAlign,
                         part.anim
                     );
-                    yield return new WaitForSeconds(0.7f);
+                    if (!immediate) yield return new WaitForSeconds(0.7f);
                 }
             dialogBusy = false;
         }
     }
     
-    public IEnumerator PlayDialogSequence(string sequenceName, params string[] args)
+    public IEnumerator PlayDialogSequence(string sequenceName, bool immediate = false, params string[] args)
     {
         if (!dialogBusy)
         {
@@ -67,7 +70,7 @@ public class dialogWrap : MonoBehaviour
                         part.rightAlign,
                         part.anim
                     );
-                    yield return new WaitForSeconds(0.7f);
+                    if (!immediate) yield return new WaitForSeconds(0.7f);
                 }
             dialogBusy = false;
         }
@@ -93,21 +96,21 @@ public class dialogWrap : MonoBehaviour
                     int tagEnd = text.IndexOf('>', i);
                     if (tagEnd != -1)
                     {
-                        string tag = text.Substring(i, tagEnd - i + 1);
-                        if (tag.StartsWith("</")) { if (closingTags.Count > 0) {
+                        string textTag = text.Substring(i, tagEnd - i + 1);
+                        if (textTag.StartsWith("</")) { if (closingTags.Count > 0) {
                             reverseInsertIndex += closingTags.Pop().Length;
                             openTags.Pop();
                             //Debug.Log(reverseInsertIndex);
                         } }
                         else
                         {
-                            int endingTagStart = text.IndexOf("</"+tag[1], tagEnd);
-                            int endingTagFinish = text.IndexOf('>', text.IndexOf("</"+tag[1], tagEnd) + 1);
+                            int endingTagStart = text.IndexOf("</"+textTag[1], tagEnd, StringComparison.InvariantCulture);
+                            int endingTagFinish = text.IndexOf('>', text.IndexOf("</"+textTag[1], tagEnd, StringComparison.InvariantCulture) + 1);
                             string endingTag = text.Substring(endingTagStart, endingTagFinish - endingTagStart + 1);
                             //Debug.Log(tag+"test"+endingTag);
-                            currentLine = currentLine.Insert(currentLine.Length + reverseInsertIndex, tag+endingTag);
+                            currentLine = currentLine.Insert(currentLine.Length + reverseInsertIndex, textTag+endingTag);
                             closingTags.Push(endingTag);
-                            openTags.Push(tag);
+                            openTags.Push(textTag);
                             reverseInsertIndex -= endingTag.Length;
                             //Debug.Log(reverseInsertIndex);
                         }
@@ -126,7 +129,12 @@ public class dialogWrap : MonoBehaviour
                     
 
                 }
-                if (anim) yield return new WaitForSeconds( text[i]=='.' || text[i]=='?' || text[i]=='!' || text[i]=='-'?.15f:.03f);
+
+                if (anim)
+                {
+                    yield return new WaitForSeconds(".?!-".Contains(text[i])?.15f:.03f);
+                    Audio.HandlePlaySoundAtTransform((rightAlign?rightSpeaker:leftSpeaker).name, transform);
+                }
 
                 try
                 {
@@ -146,7 +154,6 @@ public class dialogWrap : MonoBehaviour
                     displayText = displayText.Substring(0,displayText.LastIndexOf('\n')+1)+new string(' ', padding) + currentLine;
                 }
                 else displayText = displayText.Substring(0,displayText.LastIndexOf('\n') + 1) + currentLine;
-                //displayText += text[i];
                 screenText.text = displayText;
             }
             
@@ -156,7 +163,7 @@ public class dialogWrap : MonoBehaviour
     }
 }
 
-[System.Serializable]
+[Serializable]
 public class DialogData
 {
     public DialogEntry[] dialogs;

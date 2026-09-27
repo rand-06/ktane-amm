@@ -2,12 +2,16 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using KeepCoding;
 using UnityEngine;
 using Random = UnityEngine.Random;
 
 
 public class ammScript : MonoBehaviour
 {
+    public KMSelectable Module;
+    private Action onSelect, onDeselect;
+    
     static int ModuleIdCounter = 1;
     int ModuleId;
     private bool ModuleSolved;
@@ -57,6 +61,10 @@ public class ammScript : MonoBehaviour
     public TextMesh batteryConfig;
     private bool firstPickup = true;
     public TextMesh lockAEAN;
+    
+    public AudioClip warning;
+    public AudioClip error;
+    public AudioClip dead;
 
     private readonly string[] lockSentences =
     {
@@ -84,6 +92,9 @@ public class ammScript : MonoBehaviour
     private readonly string[] varNames =
         { "HVO1", "HVO2", "HVO3", "HVO4", "HVO5", "LVO1", "LVO2", "LVO3", "LVO4", "LVO5", "AEAN", "BTR%" };
 
+    private readonly string[] partNames =
+        { "BS0", "BS1", "BS2", "SH0", "ME0", "BS3", "SH1", "CS0", "CS1", "CS2" };
+
     private int inventoryIndex;
 
     private readonly int[] ABCD = Enumerable.Repeat(-1, 40).ToArray();
@@ -93,7 +104,7 @@ public class ammScript : MonoBehaviour
     private readonly int[] nomResistances = { 52000, 60000, 100000, 50000, 250000, 200, 360, 600, 200, 2250 };
 
 
-    private int AEAN; // human i remember you're
+    private int AEAN;
     private int BTR;
     private float dAEAN = 1;
     private int initialStep;
@@ -156,17 +167,6 @@ public class ammScript : MonoBehaviour
     private int wireFails;
     private bool riskMode;
     
-    
-    string divideBy1000(int num)
-    {
-        return num / 1000 + (num % 1000 < 10 ? ".00" : num % 1000 < 100 ? ".0" : ".") + num % 1000;
-    }
-
-    string divideBy100(int num)
-    {
-        return num / 100 + (num % 100 < 10 ? ".0" : ".") + num % 100;
-    }
-
     IEnumerator onDef()
     {
         yield return new WaitForSeconds(3f);
@@ -174,6 +174,9 @@ public class ammScript : MonoBehaviour
         {
             states[state].SetActive(false);
             states[0].SetActive(true);
+            if (AEAN<9000) videoScreenPlayer.lockImageSpam = 0;
+            else if (AEAN < 10500) videoScreenPlayer.lockImageSpam = 1;
+            else videoScreenPlayer.lockImageSpam = 2;
         }
 
         yield return null;
@@ -181,9 +184,11 @@ public class ammScript : MonoBehaviour
 
     IEnumerator onFoc()
     {
+        videoScreenPlayer.lockImageSpam = 0;
         if (!start)
         {
             start = true;
+            
             if (Input.GetKey(KeyCode.Space))
             {
                 riskMode = true;
@@ -200,6 +205,7 @@ public class ammScript : MonoBehaviour
         updateFace();
         states[0].SetActive(false);
         states[state].SetActive(true);
+        
         yield return null;
     }
 
@@ -225,8 +231,8 @@ public class ammScript : MonoBehaviour
     {
         if (peakAmount > 0)
         {
-            peakShow.text = "Local peak " + page + ":\n\n" + divideBy1000(peakAmps[page]) + " dB @ " +
-                            divideBy1000(peakFreqs[page]) + " kHz";
+            peakShow.text = "Local peak " + page + ":\n\n" + (peakAmps[page]/1000f).ToString("F3") + " dB @ " +
+                            (peakFreqs[page]/1000f).ToString("F3") + " kHz";
             peakList.text = page + 1 + "/" + peakAmount;
             for (var i = 0; i < peakAmount; i++) graph[peakIds[i]].color = i == page ? colorArray[2] : colorArray[0];
         }
@@ -250,12 +256,12 @@ public class ammScript : MonoBehaviour
         string ans = "";
         for (int i = 0; i < 10; i++)
         {
-            ans += varNames[i] + ":" + new string(' ', 24 - divideBy100(voltages[i]).Length) + divideBy100(voltages[i]) + "\n";
+            ans += varNames[i] + ":" + (voltages[i]/100f).ToString("F2").PadLeft(24) + "\n";
         }
 
         ans += "\n\n";
-        ans += varNames[10] + ":" + new string(' ', 24 - divideBy100(AEAN).Length) + divideBy100(AEAN) + "\n";
-        ans += varNames[11] + ":" + new string(' ', 24 - divideBy100(BTR).Length) + divideBy100(BTR) + "\n";
+        ans += varNames[10] + ":" + (AEAN/100f).ToString("F2").PadLeft(24) + "\n";
+        ans += varNames[11] + ":" + (BTR/100f).ToString("F2").PadLeft(24) + "\n";
         varList.text = ans;
     }
 
@@ -331,8 +337,7 @@ public class ammScript : MonoBehaviour
                     voltages[i] = Random.Range(nomVoltages[i] / 2, nomVoltages[i] * 2);
             }
 
-            Debug.LogFormat("[AMM-041-292 #{0}] Generated voltage of {1} is {2} V.", ModuleId, varNames[i],
-                divideBy100(voltages[i]));
+            Debug.LogFormat("[AMM-041-292 #{0}] Generated voltage of {1} is {2:F2} V.", ModuleId, varNames[i], voltages[i]/ 100f);
             // good luck with that one, you have 10^15 combinations in wire composer
         }
 
@@ -388,7 +393,7 @@ public class ammScript : MonoBehaviour
     void redrawGraphScreen()
     {
         for (int i = 0; i < 52; i++) graph[i].transform.localScale = new Vector3(1f, graphInts[i] / 7500f, 1f);
-        avgText.text = "Avg: " + divideBy1000(avgAmp);
+        avgText.text = "Avg: " + (avgAmp/1000f).ToString("F3");
         if (avgAmp < 2800) avgJudg.text = "<color=#6ec55cff>PASS</color>";
         else if (avgAmp < 3200) avgJudg.text = "<color=#ecdb44ff>WARN</color>";
         else avgJudg.text = "<color=#cb3c3cff>FAIL</color>";
@@ -432,35 +437,99 @@ public class ammScript : MonoBehaviour
         }
     }
 
+    IEnumerator chaoslmao()
+    {
+        faceID = 14; 
+        states[0].SetActive(true);
+        states[1].SetActive(true);
+        List<string> volts = Enumerable.Range(0, 10).Where(x => table[10+x]>0).Select(x => varNames[x]).ToList();
+        if (volts.Count < 3) volts.AddRange(Enumerable.Range(0, 10).Select(x => varNames[x]).ToList().Shuffle().GetRange(0,3));
+        List<string> parts = Enumerable.Range(0, 10).Where(x => table[x]>0 && partNames[x]!="ME0").Select(x => partNames[x]).ToList();
+        if (parts.Count < 3) parts.AddRange(Enumerable.Range(0, 10).Where(x => partNames[x]!="ME0").Select(x => varNames[x]).ToList().Shuffle().GetRange(0,3));
+        volts = volts.Distinct().ToList().Shuffle();
+        parts = parts.Distinct().ToList().Shuffle();
+        for (int i = 0; i < 15; i++)
+        {
+            string n;
+            int s = Random.Range(0, 4);
+            switch (s)
+            {
+                case 0:
+                    if (!volts.Any())
+                    {
+                        yield return dialogWrapper.PlayDialogSequence("EMOTIONAL DAMAGE", true);
+                        break;
+                    }
+                    n = volts.PickRandom();
+                    dialogWrapper.Audio.HandlePlaySoundAtTransform(warning.name,transform);
+                    yield return dialogWrapper.PlayDialogSequence("voltage250", true, n);
+                    volts.Remove(n);
+                    break;
+                case 1:
+                    if (!volts.Any())
+                    {
+                        yield return dialogWrapper.PlayDialogSequence("EMOTIONAL DAMAGE", true);
+                        break;
+                    }
+                    n = parts.PickRandom();
+                    dialogWrapper.Audio.HandlePlaySoundAtTransform(warning.name,transform);
+                    yield return dialogWrapper.PlayDialogSequence("vibroWarning", true, n);
+                    parts.Remove(n);
+                    break;
+                default: yield return dialogWrapper.PlayDialogSequence("EMOTIONAL DAMAGE", true); break;
+            }
+            yield return new WaitForSeconds(0.1f+Random.Range(0.0f,0.1f));
+        }
+        dialogWrapper.Audio.HandlePlaySoundAtTransform(error.name,transform);
+        yield return dialogWrapper.PlayDialogSequence("MEerror", true);
+        yield return new WaitForSeconds(1f+Random.Range(0.0f,0.2f));
+        foreach (string s in parts.Shuffle())
+        {
+            yield return dialogWrapper.PlayDialogSequence("OOS",true,s);
+            yield return new WaitForSeconds(0.1f+Random.Range(0.0f,0.1f));
+        }
+        states[0].SetActive(false);
+        states[1].SetActive(false);
+        setState(4);
+        dialogWrapper.Audio.HandlePlaySoundAtTransform(dead.name,transform);
+    }
+
     void LOCK()
     {
+        videoScreenPlayer.lockImageSpam = -1;
         Debug.LogFormat("[AMM-041-292 #{0}] AEAN is bigger than 120.0. Guess what.", ModuleId);
         done = true;
-        GetComponent<KMSelectable>().OnFocus = null;
-        GetComponent<KMSelectable>().OnDefocus = null;
+        Module.OnFocus -= onSelect;
+        Module.OnDefocus -= onDeselect;
         selected = false;
-        lockAEAN.text = "AMM ran away.\n\n" + lockSentences[Random.Range(0, lockSentences.Length)] + "\n\nAEAN: " + divideBy100(AEAN);
-        setState(4);
+        lockAEAN.text = "AMM ran away.\n\n" + lockSentences[Random.Range(0, lockSentences.Length)] + "\n\nAEAN: " + (AEAN/ 100f).ToString("F2");
+        StartCoroutine(chaoslmao());
     }
 
     
 
     IEnumerator SOLVE()
     {
-        done = true;
-        Debug.LogFormat("[AMM-041-292 #{0}] Yo, you did it! Good job!", ModuleId);
-        GetComponent<KMSelectable>().OnFocus = null;
-        GetComponent<KMSelectable>().OnDefocus = null;
-        StopCoroutine(onFoc());
-        StopCoroutine(onDef());
-        setState(1);
-        states[1].SetActive(false);
-        states[0].SetActive(false);
-        selected = false;
-        yield return videoScreenPlayer.playRandomVideo();
-        setState(6);
-        GetComponent<KMBombModule>().HandlePass();
-        ModuleSolved = true;
+            videoScreenPlayer.lockImageSpam = -1;
+            done = true;
+            Debug.LogFormat("[AMM-041-292 #{0}] Yo, you did it! Good job!", ModuleId);
+            Module.OnFocus -= onSelect;
+            Module.OnDefocus -= onDeselect;
+            print("AMM: onfocus & ondefocus deassigned");
+            StopCoroutine(onFoc());
+            StopCoroutine(onDef());
+            print("AMM: onfocus & ondefocus corouts stopped");
+            setState(1);
+            states[1].SetActive(false);
+            states[0].SetActive(false);
+            print("AMM: deacivated states 0, 1");
+            selected = false;
+            print("AMM: enter video corout");
+            //yield return videoScreenPlayer.playRandomVideo(Game.Mission.ID);          //I FUCKING HATE UNITY DIE DIE DIE DIE DIE D
+            print("AMM: exited video corout");
+            setState(6);
+            GetComponent<KMBombModule>().HandlePass();
+            ModuleSolved = true;
         yield return null;
     }
 
@@ -554,12 +623,12 @@ public class ammScript : MonoBehaviour
                         }
                     )
                 ); break;
-                case 10: case 11:  StartCoroutine(dialogWrapper.PlayDialogSequence(fromZero?"HVOcorrect0":AEAN>5500?"HLVOcorrectH":"HLVOcorrectL", "arm")); break;
-                case 12: case 13:  StartCoroutine(dialogWrapper.PlayDialogSequence(fromZero?"HVOcorrect0":AEAN>5500?"HLVOcorrectH":"HLVOcorrectL", "leg")); break;
-                case 14:           StartCoroutine(dialogWrapper.PlayDialogSequence(fromZero?"HVOcorrect0":AEAN>5500?"HLVOcorrectH":"HLVOcorrectL", "tail")); break;
-                case 15: case 16:  StartCoroutine(dialogWrapper.PlayDialogSequence(fromZero?"LVOcorrect0":AEAN>5500?"HLVOcorrectH":"HLVOcorrectL", "hand")); break;
-                case 17: case 18:  StartCoroutine(dialogWrapper.PlayDialogSequence(fromZero?"LVOcorrect0":AEAN>5500?"HLVOcorrectH":"HLVOcorrectL", "foot")); break;
-                case 19:           StartCoroutine(dialogWrapper.PlayDialogSequence(fromZero?"LVOcorrect0":AEAN>5500?"HLVOcorrectH":"HLVOcorrectL", "tail")); break;
+                case 10: case 11:  StartCoroutine(dialogWrapper.PlayDialogSequence(fromZero?"HVOcorrect0":AEAN>5500?"HLVOcorrectH":"HLVOcorrectL",false, "arm")); break;
+                case 12: case 13:  StartCoroutine(dialogWrapper.PlayDialogSequence(fromZero?"HVOcorrect0":AEAN>5500?"HLVOcorrectH":"HLVOcorrectL",false, "leg")); break;
+                case 14:           StartCoroutine(dialogWrapper.PlayDialogSequence(fromZero?"HVOcorrect0":AEAN>5500?"HLVOcorrectH":"HLVOcorrectL",false, "tail")); break;
+                case 15: case 16:  StartCoroutine(dialogWrapper.PlayDialogSequence(fromZero?"LVOcorrect0":AEAN>5500?"HLVOcorrectH":"HLVOcorrectL",false, "hand")); break;
+                case 17: case 18:  StartCoroutine(dialogWrapper.PlayDialogSequence(fromZero?"LVOcorrect0":AEAN>5500?"HLVOcorrectH":"HLVOcorrectL",false, "foot")); break;
+                case 19:           StartCoroutine(dialogWrapper.PlayDialogSequence(fromZero?"LVOcorrect0":AEAN>5500?"HLVOcorrectH":"HLVOcorrectL",false, "tail")); break;
             }
         }
     }
@@ -577,6 +646,7 @@ public class ammScript : MonoBehaviour
         updateFace();
         if (check())
         {
+            StartCoroutine(videoScreenPlayer.playStatic(.4f));
             if (AEAN < 10500)
             {
                 switch (index)
@@ -585,11 +655,11 @@ public class ammScript : MonoBehaviour
                     case 3: case 6:                 StartCoroutine(dialogWrapper.PlayDialogSequence("SHwrong")); break;
                     case 4:                         StartCoroutine(dialogWrapper.PlayDialogSequence("MEwrong")); break;
                     case 7: case 8: case 9:         StartCoroutine(dialogWrapper.PlayDialogSequence(AEAN > 5500 ? "CSwrongH" : "CSwrongL")); break;
-                    case 10: case 11:               StartCoroutine(dialogWrapper.PlayDialogSequence(fromZero?"HLVOwrong0":"HLVOwrong", "arm")); break;
-                    case 12: case 13:               StartCoroutine(dialogWrapper.PlayDialogSequence(fromZero?"HLVOwrong0":"HLVOwrong", "leg")); break;
-                    case 14: case 19:               StartCoroutine(dialogWrapper.PlayDialogSequence(fromZero?"HLVOwrong0":"HLVOwrong", "tail")); break;
-                    case 15: case 16:               StartCoroutine(dialogWrapper.PlayDialogSequence(fromZero?"HLVOwrong0":"HLVOwrong", "hand")); break;
-                    case 17: case 18:               StartCoroutine(dialogWrapper.PlayDialogSequence(fromZero?"HLVOwrong0":"HLVOwrong", "foot")); break;
+                    case 10: case 11:               StartCoroutine(dialogWrapper.PlayDialogSequence(fromZero?"HLVOwrong0":"HLVOwrong",false, "arm")); break;
+                    case 12: case 13:               StartCoroutine(dialogWrapper.PlayDialogSequence(fromZero?"HLVOwrong0":"HLVOwrong",false, "leg")); break;
+                    case 14: case 19:               StartCoroutine(dialogWrapper.PlayDialogSequence(fromZero?"HLVOwrong0":"HLVOwrong",false, "tail")); break;
+                    case 15: case 16:               StartCoroutine(dialogWrapper.PlayDialogSequence(fromZero?"HLVOwrong0":"HLVOwrong",false, "hand")); break;
+                    case 17: case 18:               StartCoroutine(dialogWrapper.PlayDialogSequence(fromZero?"HLVOwrong0":"HLVOwrong",false, "foot")); break;
                 }
             }
             else
@@ -622,8 +692,8 @@ public class ammScript : MonoBehaviour
         int newres = parallel ? (int)(100 / (1 / resistance() + 1 / (res / 100f))) : res + (int)(resistance() * 100);
         int newVolt = (int)(nomVoltages[index] * ((float)newres / nomResistances[index]));
         Debug.LogFormat(
-            "[AMM-041-292 #{0}] Resistance on Wire Composer: {1}.\nCombined resistance: {2}.\nNew voltage: {3}",
-            ModuleId, resistance(), divideBy100(newres), divideBy100(newVolt));
+            "[AMM-041-292 #{0}] Resistance on Wire Composer: {1}.\nCombined resistance: {2:F2}.\nNew voltage: {3:F2}",
+            ModuleId, resistance(), newres/ 100f, newVolt/ 100f);
         if ((float)newVolt / nomVoltages[index] >= (index < 5 ? 0.97f : 0.9f) &&
             (float)newVolt / nomVoltages[index] <= (index < 5 ? 1.03f : 1.1f))
         {
@@ -726,7 +796,7 @@ public class ammScript : MonoBehaviour
                     new[]
                     {
                         new[] { "charge" },
-                        new[] { "supplysucceded", divideBy100(BTR) },
+                        new[] { "supplysucceded", (BTR/100f).ToString("F2") },
                         new[] {AEAN>5500?"supply2H":BTR>200?"supply2LH":"supply2LL"}
                     }
                 )
@@ -746,7 +816,7 @@ public class ammScript : MonoBehaviour
             if (wireCharge)
             {
                 wireFails++;
-                StartCoroutine(dialogWrapper.PlayDialogSequence(wireFails==1?"supplyfailed0":"supplyfailed", sourceChargeConfig));
+                StartCoroutine(dialogWrapper.PlayDialogSequence(wireFails==1?"supplyfailed0":"supplyfailed",false, sourceChargeConfig));
             }
             else
             {
@@ -792,7 +862,7 @@ public class ammScript : MonoBehaviour
 
         if (distance == 0 && picked)
             StartCoroutine(dialogWrapper.PlayDialogSequence(
-                "foundpower", 
+                "foundpower", false,
                 AEAN>5500?"Put me down, <b>please</b>.":"Could you put me down now?",
                 sourceChargeConfig, 
                 AEAN>5500?"Put me down now.":"Please put me down."
@@ -876,21 +946,24 @@ public class ammScript : MonoBehaviour
     void Start()
     {
         distance = Random.Range(150, 301) * 20;
-        //distance = 150;
         AEAN = Random.Range(6000, 8000);
         BTR = Random.Range(10, 1000);
         states[0].SetActive(true);
         for (int i = 1; i < 10; i++) states[i].SetActive(false);
-        GetComponent<KMSelectable>().OnFocus += delegate
+        
+        onSelect = delegate
         {
             selected = true;
             StartCoroutine(onFoc());
         };
-        GetComponent<KMSelectable>().OnDefocus += delegate
+        onDeselect = delegate
         {
             selected = false;
             StartCoroutine(onDef());
         };
+        
+        Module.OnFocus += onSelect;
+        Module.OnDefocus += onDeselect;
         face.sprite = faces[faceID];
         generate();
         AbcdCalc();
@@ -898,7 +971,6 @@ public class ammScript : MonoBehaviour
         StartCoroutine(cycle());
         refreshWireComposer();
         generateChargeConfigs();
-
         if (ignoredModules == null)
             ignoredModules = Boss.GetIgnoredModules("AMM-041-292", new[]
             {
@@ -970,6 +1042,7 @@ public class ammScript : MonoBehaviour
             redrawWireComposerScreen();
         };
         StartCoroutine(solvablesCheck());
+        print("Mission ID: "+Game.Mission.ID);
     }
 
     int expectedLastDigit(int id)
@@ -988,6 +1061,8 @@ public class ammScript : MonoBehaviour
         int lastTimerDigit = lastDigit==-1?(int)bombInfo.GetTime() % 10:lastDigit;
         switch (action)
         {
+            case 'Z':
+                return;
             case 'V':
                 if (!VGopened)
                 {
@@ -1435,7 +1510,6 @@ public class ammScript : MonoBehaviour
                     aeanChange(3);
                     check();
                     updateFace();
-                    //StartCoroutine(dialogWrapper.PlayDialogSequence("drop"));
                     StopCoroutine(holding());
                     setState(1);
                     drops++;
@@ -1445,7 +1519,6 @@ public class ammScript : MonoBehaviour
                         case 2: StartCoroutine(dialogWrapper.playSequence(new[]{new[]{"drop"},new[]{"dropped2"}})); break;
                         default: StartCoroutine(dialogWrapper.playSequence(new[]{new[]{"drop"},new[]{"dropped3"}})); break;
                     }
-
                 }
 
                 return;
@@ -1471,6 +1544,7 @@ public class ammScript : MonoBehaviour
     void Update()
     {
         if (!selected || dialogWrapper.dialogBusy || ModuleSolved) return;
+        if (Input.GetKeyDown(KeyCode.Z)) ACTION('Z');
         if (Input.GetKeyDown(KeyCode.V)) ACTION('V');
         if (Input.GetKeyDown(KeyCode.G)) ACTION('G');
         if (Input.GetKeyDown(KeyCode.I)) ACTION('I');
@@ -1492,6 +1566,9 @@ public class ammScript : MonoBehaviour
         if (Input.GetKeyUp(KeyCode.Q) && holdBool && !charging) ACTION('q');
         if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter)) ACTION('E');
         if (Input.GetKeyDown(KeyCode.Backspace)) ACTION('B');
+#if UNITY_EDITOR
+        if (Input.GetKeyDown(KeyCode.Home)) StartCoroutine(SOLVE());
+#endif
     }
 
 #pragma warning disable 414
@@ -1504,13 +1581,15 @@ Use spaces between keys. Example: !{0} I S S-2 S S E D D @ E 1";
 #pragma warning restore 414
     public IEnumerator ProcessTwitchCommand(string Command)
     {
+        Module.OnFocus -= onSelect;
+        Module.OnDefocus -= onDeselect;
         yield return null;
         var commandArgs = Command.ToUpperInvariant().Trim();
-        if (commandArgs == "NOTICE" || commandArgs == "RISK" && !start)
+        
+        if ((commandArgs == "NOTICE" || commandArgs == "RISK") && !start)
         {
-            if (commandArgs == "RISK") {riskMode = true; Debug.LogFormat("[AMM-041-292 #{0}] Risk mode activated.", ModuleId);}
-            selected = true;
-            yield return onFoc();
+            Debug.LogFormat("[AMM-041-292 #{0}] Started with TP. Command: \"{1}\"; Comparing with \"RISK\": {2}", ModuleId, commandArgs, riskMode = commandArgs == "RISK");
+            StartCoroutine(onFoc());
         }
         else if (start)
         {
@@ -1541,5 +1620,4 @@ Use spaces between keys. Example: !{0} I S S-2 S S E D D @ E 1";
         yield return null;
         yield return SOLVE();
     }
-    
 }

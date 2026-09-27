@@ -232,7 +232,7 @@
 		"dialog":[
 			{
 				"text": ["Hold still. Trying to put your shaft back."],
-				"rightAlign": false
+				"rightAlign": true
 			}
 		]
 	},
@@ -258,7 +258,7 @@
 		"dialog":[
 			{
 				"text": ["How are you even <b>alive</b> after all this?"],
-				"rightAlign": false
+				"rightAlign": true
 			},
 			{
 				"text": ["Pure chance."],
@@ -768,7 +768,48 @@
 					"t̵̴Å̶ž̵6̷1̷Ç̵š̷ˆ̶·̷m̵$̸!!",
 					"Â̴ï̴£̸,@̵Æ̷̷-D̶!̷!!"
 				],
-				"rightAlign": false
+				"rightAlign": false,
+				"anim": false
+			}
+		]
+	},
+	{
+		"name": "voltage250",
+		"dialog":[
+			{
+				"text": ["<color=#ecdb44>The 250% voltage threshold for {0} has been exceeded. Immediate service is required.</color>"],
+				"rightAlign": false,
+                "anim": false
+			}
+		]
+	},
+	{
+		"name": "vibroWarning",
+		"dialog":[
+			{
+				"text": ["<color=#ecdb44>The critical vibration threshold for {0} has been exceeded.</color>"],
+				"rightAlign": false,
+                "anim": false
+			}
+		]
+	},
+	{
+		"name": "MEerror",
+		"dialog":[
+			{
+				"text": ["<color=#cb3c3c>The critical vibration threshold for ME0 has been exceeded. TURN OFF THE MACHINE IMMEDIATELY.</color>"],
+				"rightAlign": false,
+                "anim": false
+			}
+		]
+	},
+	{
+		"name": "OOS",
+		"dialog":[
+			{
+				"text": ["<color=#cb3c3c>{0} is faulty. Replacement required.</color>"],
+				"rightAlign": false,
+                "anim": false
 			}
 		]
 	},
