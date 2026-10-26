@@ -36,6 +36,7 @@ public class ammScript : MonoBehaviour
     private bool holdBool;
     private bool charging;
     private bool start;
+    
 
     public TextMesh[] amounts;
     public TextMesh[] brackets;
@@ -166,6 +167,8 @@ public class ammScript : MonoBehaviour
     private int batFails;
     private int wireFails;
     private bool riskMode;
+
+    private bool TwitchPlaysActive, TwitchShouldSolve;
     
     IEnumerator onDef()
     {
@@ -545,7 +548,10 @@ public class ammScript : MonoBehaviour
         for (int i = 0; i < 20; i++)
             if (table[i] == 1) return true;
             else if (table[i] == 1) judge = false;
-        if ((AEAN < 2000 || judge) && (BTR > 499 || charging)) {StartCoroutine(SOLVE());
+        if ((AEAN < 2000 || judge) && (BTR > 499 || charging)) {
+            
+            if (TwitchPlaysActive) TwitchShouldSolve = true;
+                else StartCoroutine(SOLVE());
             return false;
         }
         return true;
@@ -1600,6 +1606,11 @@ Use spaces between keys. Example: !{0} I S S-2 S S E D D @ E 1";
                 if (command.Length == 1 && commandArgs.RegexMatch("([0-9VGIADWSERBQ!@#$%\\^])+"))
                 {
                     ACTION(command[0] == 'Q' ? '§' : command[0]);
+                    if (TwitchShouldSolve)
+                    {
+                        yield return "solve";
+                        yield return SOLVE();
+                    }
                 }
                 else if (command.Length == 3 && commandArgs.RegexMatch("[0-9VGIADWSERBQ!@#$%\\^]-[0-9]"))
                 {
@@ -1610,6 +1621,11 @@ Use spaces between keys. Example: !{0} I S S-2 S S E D D @ E 1";
                         lastDigit = (int)bombInfo.GetTime()%10;
                     }
                     ACTION(command[0] == 'Q' ? '§' : command[0], command[2] - '0');
+                    if (TwitchShouldSolve)
+                    {
+                        yield return "solve";
+                        yield return SOLVE();
+                    }
                 }
             }
         }
